@@ -37,7 +37,7 @@ export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Leave a review comment..."
+        placeholder="Leave a review comment... (markdown supported)"
         rows={3}
       />
       <div className="comment-form-actions">

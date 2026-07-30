@@ -54,6 +54,8 @@
     "lucide-react": "^1.7.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tsdown": "^0.21.7",
     "tsx": "^4.19.4",
     "typescript": "^6.0.2",

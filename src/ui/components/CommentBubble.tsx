@@ -3,6 +3,7 @@ import { UserCircle, CheckCircle2, Bot } from 'lucide-react'
 import type { ReviewComment } from '../../types'
 import { timeAgo } from '../utils'
 import { CommentForm } from './CommentForm'
+import { Markdown } from './Markdown'
 
 interface CommentBubbleProps {
   comment: ReviewComment
@@ -53,7 +54,9 @@ export function CommentBubble({ comment, onDelete, onReply, onResolve }: Comment
           </button>
         )}
       </div>
-      <div className="comment-bubble-body">{comment.body}</div>
+      <div className="comment-bubble-body">
+        <Markdown>{comment.body}</Markdown>
+      </div>
       {comment.replies?.length > 0 && (
         <div className="comment-replies">
           {comment.replies.map((reply) => (
@@ -66,7 +69,9 @@ export function CommentBubble({ comment, onDelete, onReply, onResolve }: Comment
                 )}
                 <span className="comment-bubble-time">{timeAgo(reply.createdAt)}</span>
               </div>
-              <div className="comment-reply-body">{reply.body}</div>
+              <div className="comment-reply-body">
+                <Markdown>{reply.body}</Markdown>
+              </div>
             </div>
           ))}
         </div>
