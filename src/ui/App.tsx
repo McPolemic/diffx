@@ -37,7 +37,7 @@ export function App() {
     untracked: settings.untracked,
   })
   const { comments, addComment, removeComment, replyToComment, resolveComment, unresolveComment } = useComments()
-  const { reviewDone, markDone, closeReview } = useReviewStatus()
+  const { reviewDone, markDone } = useReviewStatus()
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
@@ -114,12 +114,6 @@ export function App() {
 
   const unresolvedCount = useMemo(
     () => comments.filter((c) => c.status !== 'resolved').length,
-    [comments],
-  )
-
-  // Every thread has an answer, so the only thing left is the reviewer accepting them.
-  const allReplied = useMemo(
-    () => comments.every((c) => c.replies?.length > 0),
     [comments],
   )
 
@@ -202,7 +196,6 @@ export function App() {
         deletions={diffStats.deletions}
         unresolvedCount={unresolvedCount}
         reviewDone={reviewDone}
-        allReplied={allReplied}
         diffStyle={settings.diffStyle}
         diffOptions={{ staged: settings.staged, untracked: settings.untracked }}
         defaultTabSize={settings.defaultTabSize}
@@ -217,7 +210,6 @@ export function App() {
         onDone={async () => {
           await markDone()
         }}
-        onCloseReview={closeReview}
       />
       <div className="app-body">
         {sidebar.collapsed ? (

@@ -26,14 +26,9 @@ export function useReviewStatus() {
     },
   })
 
-  const closeReview = async () => {
-    await fetch('/api/shutdown', { method: 'POST' })
-  }
-
   return {
     reviewDone: data?.reviewDone ?? false,
     openComments: data?.openComments ?? 0,
     markDone: doneMutation.mutateAsync,
-    closeReview,
   }
 }

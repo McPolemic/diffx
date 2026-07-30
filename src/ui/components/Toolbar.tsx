@@ -10,7 +10,6 @@ interface ToolbarProps {
   deletions: number
   unresolvedCount: number
   reviewDone: boolean
-  allReplied: boolean
   diffStyle: 'split' | 'unified'
   diffOptions: DiffOptions
   defaultTabSize: number
@@ -23,7 +22,6 @@ interface ToolbarProps {
   onSoftWrapChange: (softWrap: boolean) => void
   onBrowserChange: (browser: string) => void
   onDone: () => Promise<void>
-  onCloseReview: () => void
 }
 
 export function Toolbar({
@@ -34,7 +32,6 @@ export function Toolbar({
   deletions,
   unresolvedCount,
   reviewDone,
-  allReplied,
   diffStyle,
   diffOptions,
   defaultTabSize,
@@ -47,7 +44,6 @@ export function Toolbar({
   onSoftWrapChange,
   onBrowserChange,
   onDone,
-  onCloseReview,
 }: ToolbarProps) {
   const [handingOff, setHandingOff] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -181,18 +177,16 @@ export function Toolbar({
         </div>
         <button
           className="btn btn-primary btn-sm"
-          onClick={reviewDone ? onCloseReview : handleDone}
-          disabled={handingOff || (reviewDone && !allReplied)}
+          onClick={handleDone}
+          disabled={reviewDone || handingOff}
           title={
             reviewDone
-              ? allReplied
-                ? 'Close the review and stop the server'
-                : 'Waiting for the remaining threads to be answered'
+              ? 'Review handed off; the session closes once the last thread is answered'
               : 'Finish commenting and hand the review off'
           }
         >
-          {reviewDone ? 'Close review' : 'Done'}
-          {unresolvedCount > 0 && ` (${unresolvedCount})`}
+          {reviewDone ? 'Handed off' : 'Done'}
+          {!reviewDone && unresolvedCount > 0 && ` (${unresolvedCount})`}
         </button>
       </div>
     </div>
