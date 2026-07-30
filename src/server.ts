@@ -6,6 +6,7 @@ import { getGitDiff, getCustomGitDiff, getRepoName, getBranchName, getFileConten
 import { loadSettings, saveSettings } from './settings.js'
 import { InMemoryCommentStore } from './comments.js'
 import type { CommentStore } from './comments.js'
+import type { ReplyAuthor } from './types.js'
 import { isSafePath } from './path.js'
 
 const MIME_TYPES: Record<string, string> = {
@@ -240,14 +241,36 @@ export function createApp(
 
   app.post('/api/comments/:id/replies', async (c) => {
     const commentId = c.req.param('id')
-    const { body } = await c.req.json()
+    const { body, author } = await c.req.json()
+    // Defaults to 'agent' so existing API callers keep their meaning; the UI is
+    // explicit about being the reviewer.
+    const replyAuthor: ReplyAuthor = author === 'reviewer' ? 'reviewer' : 'agent'
     const reply = {
       id: crypto.randomUUID(),
       body,
+      author: replyAuthor,
       createdAt: Date.now(),
     }
     const updated = await store.addReply(commentId, reply)
     if (!updated) return c.json({ error: 'Comment not found' }, 404)
+
+    if (replyAuthor === 'reviewer') {
+      // A reviewer replying to a settled thread is asking for more work, so the
+      // thread becomes outstanding again and shows up in openComments.
+      const reopened = updated.status === 'resolved'
+      if (reopened) await store.update(commentId, { status: 'open' })
+      emitEvent('REPLY', {
+        commentId,
+        filePath: updated.filePath,
+        side: updated.side,
+        lineNumber: updated.lineNumber,
+        lineContent: updated.lineContent,
+        originalComment: updated.body,
+        reply: body,
+        reopened,
+      })
+    }
+
     return c.json(updated)
   })
 

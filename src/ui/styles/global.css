@@ -630,6 +630,21 @@ body {
     color: var(--text);
 }
 
+.comment-bubble-reply {
+    margin-top: 8px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.comment-bubble-reply:hover {
+    color: var(--text);
+    border-color: var(--text-secondary);
+}
+
 /* Binary file diff */
 .binary-diff-header {
     display: flex;

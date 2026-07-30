@@ -1,6 +1,9 @@
+export type ReplyAuthor = 'reviewer' | 'agent'
+
 export interface CommentReply {
   id: string
   body: string
+  author: ReplyAuthor
   createdAt: number
 }
 
