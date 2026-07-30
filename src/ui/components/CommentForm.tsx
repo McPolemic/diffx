@@ -6,6 +6,7 @@ interface CommentFormProps {
   placeholder?: string
   submitLabel?: string
   autoFocus?: boolean
+  hideSubmit?: boolean
 }
 
 export function CommentForm({
@@ -14,6 +15,7 @@ export function CommentForm({
   placeholder = 'Leave a review comment',
   submitLabel = 'Comment',
   autoFocus = true,
+  hideSubmit = false,
 }: CommentFormProps) {
   const [body, setBody] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -32,7 +34,9 @@ export function CommentForm({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Enter sends, shift+enter breaks the line. Cmd/ctrl+enter also sends, since that
+    // is the habit this box inherits from every other review tool.
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
@@ -40,6 +44,8 @@ export function CommentForm({
       onCancel?.()
     }
   }
+
+  const showActions = !hideSubmit || onCancel
 
   return (
     <div className="comment-form">
@@ -51,16 +57,25 @@ export function CommentForm({
         placeholder={placeholder}
         rows={3}
       />
-      <div className="comment-form-actions">
-        {onCancel && (
-          <button className="btn btn-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
-        <button className="btn btn-primary" onClick={handleSubmit} disabled={!body.trim()}>
-          {submitLabel}
-        </button>
-      </div>
+      {showActions ? (
+        <div className="comment-form-actions">
+          {onCancel && (
+            <button className="btn btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+          {!hideSubmit && (
+            <button className="btn btn-primary" onClick={handleSubmit} disabled={!body.trim()}>
+              {submitLabel}
+            </button>
+          )}
+        </div>
+      ) : (
+        // Without a button the keys are the only affordance, so say what they are.
+        <p className="comment-form-hint">
+          <kbd>Enter</kbd> to send, <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line
+        </p>
+      )}
     </div>
   )
 }

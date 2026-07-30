@@ -136,8 +136,8 @@ export function CommentBubble({
           <CommentForm
             onSubmit={(body) => onReply(comment.id, body)}
             placeholder="Reply"
-            submitLabel="Reply"
             autoFocus={false}
+            hideSubmit
           />
 
           {isResolved && (

@@ -498,6 +498,21 @@ body {
     box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
 }
 
+.comment-form-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.comment-form-hint kbd {
+    padding: 1px 4px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
 .comment-form-actions {
     display: flex;
     justify-content: flex-end;
