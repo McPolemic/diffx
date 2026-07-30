@@ -90,11 +90,27 @@ function diffContainsFileVersion(patch: string, path: string, oldOid: string, ne
   return false
 }
 
-export function createApp(clientDir: string, customDiffArgs?: string[], commentStore?: CommentStore) {
+// Review events are written to stdout as single lines so a supervising process can
+// consume them as a stream instead of polling the API.
+function emitEvent(type: string, payload?: unknown) {
+  if (payload === undefined) {
+    console.log(type)
+  } else {
+    console.log(`${type} ${JSON.stringify(payload)}`)
+  }
+}
+
+export function createApp(
+  clientDir: string,
+  customDiffArgs?: string[],
+  commentStore?: CommentStore,
+  onShutdown: () => void = () => process.exit(0),
+) {
   const app = new Hono()
   const isCustomMode = !!customDiffArgs
   const store = commentStore ?? new InMemoryCommentStore()
   const viewedFiles = new Map<string, string>()
+  let reviewDone = false
 
   app.get('/api/diff', (c) => {
     let patch: string
@@ -210,6 +226,7 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
       replies: [],
     }
     const created = await store.add(comment)
+    emitEvent('COMMENT', created)
     return c.json(created, 201)
   })
 
@@ -238,6 +255,34 @@ export function createApp(clientDir: string, customDiffArgs?: string[], commentS
     const id = c.req.param('id')
     const removed = await store.remove(id)
     if (!removed) return c.json({ error: 'Comment not found' }, 404)
+    return c.json({ ok: true })
+  })
+
+  app.get('/api/status', async (c) => {
+    const comments = await store.getAll()
+    return c.json({
+      reviewDone,
+      openComments: comments.filter((comment) => comment.status === 'open').length,
+    })
+  })
+
+  // Signals that the reviewer has finished commenting. Deliberately does not stop the
+  // server: outstanding comments still need replies and resolutions, which the reviewer
+  // watches land in the browser. Shutdown is a separate, explicit call.
+  app.post('/api/review-done', async (c) => {
+    const comments = await store.getAll()
+    const openComments = comments.filter((comment) => comment.status === 'open').length
+    if (!reviewDone) {
+      reviewDone = true
+      emitEvent('REVIEW-DONE', { openComments, totalComments: comments.length })
+    }
+    return c.json({ reviewDone, openComments })
+  })
+
+  app.post('/api/shutdown', (c) => {
+    emitEvent('SHUTDOWN')
+    // Let the response flush before the process goes away.
+    setTimeout(onShutdown, 50)
     return c.json({ ok: true })
   })
 
@@ -274,10 +319,14 @@ export function startServer(options: {
   clientDir: string
   customDiffArgs?: string[]
 }): Promise<{ port: number }> {
-  const app = createApp(options.clientDir, options.customDiffArgs)
-
   return new Promise((resolve) => {
-    const server = serve({
+    let server: ReturnType<typeof serve> | undefined
+    const app = createApp(options.clientDir, options.customDiffArgs, undefined, () => {
+      server?.close()
+      process.exit(0)
+    })
+
+    server = serve({
       fetch: app.fetch,
       port: options.port,
       hostname: options.host,
