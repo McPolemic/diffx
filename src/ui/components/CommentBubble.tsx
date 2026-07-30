@@ -96,7 +96,7 @@ export function CommentBubble({
           too: following up on a finished fix ("undo this") is the main reason to reply. */}
       <CommentForm
         onSubmit={(body) => onReply(comment.id, body)}
-        placeholder="Reply..."
+        placeholder="Reply"
         submitLabel="Reply"
         autoFocus={false}
       />

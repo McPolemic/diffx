@@ -11,7 +11,7 @@ interface CommentFormProps {
 export function CommentForm({
   onSubmit,
   onCancel,
-  placeholder = 'Leave a review comment...',
+  placeholder = 'Leave a review comment',
   submitLabel = 'Comment',
   autoFocus = true,
 }: CommentFormProps) {
