@@ -23,6 +23,7 @@ interface FileDiffCardProps {
   onAddComment: (filePath: string, side: AnnotationSide, lineNumber: number, lineContent: string, body: string) => void
   onDeleteComment: (id: string) => void
   onReplyComment: (id: string, body: string) => void
+  onResolveComment: (id: string) => void
 }
 
 export const FileDiffCard = memo(function FileDiffCard({
@@ -38,6 +39,7 @@ export const FileDiffCard = memo(function FileDiffCard({
   onAddComment,
   onDeleteComment,
   onReplyComment,
+  onResolveComment,
 }: FileDiffCardProps) {
   const [pending, setPending] = useState<PendingComment | null>(null)
 
@@ -132,6 +134,7 @@ export const FileDiffCard = memo(function FileDiffCard({
                   comment={annotation.metadata as ReviewComment}
                   onDelete={onDeleteComment}
                   onReply={onReplyComment}
+                  onResolve={onResolveComment}
                 />
               )
             }}

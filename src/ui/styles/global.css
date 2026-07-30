@@ -571,12 +571,10 @@ body {
     }
 }
 
+/* Resolution applies to the whole thread, so the whole thread recedes. Striking out
+   only the opening message read as if that one comment had been resolved. */
 .comment-resolved {
     opacity: 0.6;
-}
-
-.comment-resolved .comment-bubble-body {
-    text-decoration: line-through;
 }
 
 .comment-bubble-resolved {
@@ -628,6 +626,23 @@ body {
     white-space: pre-wrap;
     word-break: break-word;
     color: var(--text);
+}
+
+.comment-bubble-resolve {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.comment-bubble-resolve:hover {
+    color: var(--success, var(--text));
+    border-color: currentColor;
 }
 
 .comment-bubble-reply {

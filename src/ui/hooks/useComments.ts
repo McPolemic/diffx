@@ -43,7 +43,7 @@ export function useComments() {
       const res = await fetch(`/api/comments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body, status }),
+        body: JSON.stringify({ body, status, author: 'reviewer' }),
       })
       return res.json() as Promise<ReviewComment>
     },

@@ -8,9 +8,10 @@ interface CommentBubbleProps {
   comment: ReviewComment
   onDelete: (id: string) => void
   onReply: (id: string, body: string) => void
+  onResolve: (id: string) => void
 }
 
-export function CommentBubble({ comment, onDelete, onReply }: CommentBubbleProps) {
+export function CommentBubble({ comment, onDelete, onReply, onResolve }: CommentBubbleProps) {
   const [, setTick] = useState(0)
   const [replying, setReplying] = useState(false)
   const isResolved = comment.status === 'resolved'
@@ -25,11 +26,22 @@ export function CommentBubble({ comment, onDelete, onReply }: CommentBubbleProps
       <div className="comment-bubble-header">
         <UserCircle size={18} className="comment-bubble-avatar" />
         <span className="comment-bubble-time">{timeAgo(comment.createdAt)}</span>
-        {isResolved && (
+        {isResolved ? (
           <span className="comment-bubble-resolved">
             <CheckCircle2 size={14} />
             Resolved
           </span>
+        ) : (
+          // Offered even before a reply lands: a thread can become moot before it
+          // is ever answered.
+          <button
+            className="comment-bubble-resolve"
+            onClick={() => onResolve(comment.id)}
+            title="Mark this thread resolved"
+          >
+            <CheckCircle2 size={14} />
+            Mark resolved
+          </button>
         )}
         {!isResolved && (
           <button

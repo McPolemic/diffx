@@ -36,8 +36,8 @@ export function App() {
     staged: settings.staged,
     untracked: settings.untracked,
   })
-  const { comments, addComment, removeComment, replyToComment } = useComments()
-  const { reviewDone, markDone } = useReviewStatus()
+  const { comments, addComment, removeComment, replyToComment, resolveComment } = useComments()
+  const { reviewDone, markDone, closeReview } = useReviewStatus()
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
@@ -111,6 +111,17 @@ export function App() {
     }
     return map
   }, [binaryFiles])
+
+  const unresolvedCount = useMemo(
+    () => comments.filter((c) => c.status !== 'resolved').length,
+    [comments],
+  )
+
+  // Every thread has an answer, so the only thing left is the reviewer accepting them.
+  const allReplied = useMemo(
+    () => comments.every((c) => c.replies?.length > 0),
+    [comments],
+  )
 
   const commentCounts = useMemo(() => {
     const counts: Record<string, number> = {}
@@ -189,8 +200,9 @@ export function App() {
         fileCount={files.length}
         additions={diffStats.additions}
         deletions={diffStats.deletions}
-        commentCount={comments.length}
+        unresolvedCount={unresolvedCount}
         reviewDone={reviewDone}
+        allReplied={allReplied}
         diffStyle={settings.diffStyle}
         diffOptions={{ staged: settings.staged, untracked: settings.untracked }}
         defaultTabSize={settings.defaultTabSize}
@@ -205,6 +217,7 @@ export function App() {
         onDone={async () => {
           await markDone()
         }}
+        onCloseReview={closeReview}
       />
       <div className="app-body">
         {sidebar.collapsed ? (
@@ -243,6 +256,7 @@ export function App() {
               onAddComment={addComment}
               onDeleteComment={removeComment}
               onReplyComment={replyToComment}
+              onResolveComment={resolveComment}
             />
           </Virtualizer>
         </main>

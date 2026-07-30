@@ -233,7 +233,16 @@ export function createApp(
 
   app.put('/api/comments/:id', async (c) => {
     const id = c.req.param('id')
-    const { body, status } = await c.req.json()
+    const { body, status, author } = await c.req.json()
+    // Resolving is the reviewer's judgement that they are satisfied, so it is theirs
+    // alone to make. Enforced here rather than left to convention, because an agent
+    // that can mark its own work accepted will eventually do it.
+    if (status !== undefined && author !== 'reviewer') {
+      return c.json(
+        { error: 'Only the reviewer can change a thread status. Reply instead.' },
+        403,
+      )
+    }
     const updated = await store.update(id, { body, status })
     if (!updated) return c.json({ error: 'Comment not found' }, 404)
     return c.json(updated)
