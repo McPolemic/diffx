@@ -18,6 +18,10 @@
     --success: #1a7f37;
     --comment-bg: #fff8c5;
     --comment-border: #d4a72c;
+    --font-sans:
+        -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica,
+        Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -502,6 +506,12 @@ body {
 }
 
 /* Comment bubble */
+/* These render inside the diff, whose host font is monospace. Prose should not be. */
+.comment-bubble,
+.comment-form {
+    font-family: var(--font-sans);
+}
+
 .comment-bubble {
     max-width: 600px;
     padding: 10px 14px;
@@ -663,7 +673,7 @@ body {
     padding: 1px 4px;
     border-radius: 3px;
     background: var(--bg-secondary);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
 }
 .md pre {
@@ -677,7 +687,23 @@ body {
 .md pre code {
     padding: 0;
     background: none;
+    font-family: var(--font-mono);
     font-size: 12px;
+}
+
+/* Shiki emits both themes as custom properties (defaultColor: false), so the block
+   follows the system theme without re-highlighting. */
+.md-code .shiki,
+.md-code .shiki span {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg);
+}
+@media (prefers-color-scheme: dark) {
+    .md-code .shiki,
+    .md-code .shiki span {
+        color: var(--shiki-dark);
+        background-color: var(--shiki-dark-bg);
+    }
 }
 .md blockquote {
     margin: 0 0 8px;
@@ -740,21 +766,6 @@ body {
 .comment-bubble-resolve:hover {
     color: var(--success, var(--text));
     border-color: currentColor;
-}
-
-.comment-bubble-reply {
-    margin-top: 8px;
-    padding: 2px 8px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    cursor: pointer;
-}
-.comment-bubble-reply:hover {
-    color: var(--text);
-    border-color: var(--text-secondary);
 }
 
 /* Binary file diff */

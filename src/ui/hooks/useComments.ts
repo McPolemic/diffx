@@ -105,6 +105,13 @@ export function useComments() {
     [editMutation],
   )
 
+  const unresolveComment = useCallback(
+    (id: string) => {
+      editMutation.mutate({ id, status: 'open' })
+    },
+    [editMutation],
+  )
+
   const formatAllComments = useCallback((): string => {
     if (comments.length === 0) return ''
 
@@ -156,6 +163,7 @@ export function useComments() {
     removeComment,
     replyToComment,
     editComment,
+    unresolveComment,
     resolveComment,
     getAnnotationsForFile,
     formatAllComments,

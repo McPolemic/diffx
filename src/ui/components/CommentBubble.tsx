@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { UserCircle, CheckCircle2, Bot } from 'lucide-react'
+import { UserCircle, CheckCircle2, Bot, RotateCcw } from 'lucide-react'
 import type { ReviewComment } from '../../types'
 import { timeAgo } from '../utils'
 import { CommentForm } from './CommentForm'
@@ -10,11 +10,17 @@ interface CommentBubbleProps {
   onDelete: (id: string) => void
   onReply: (id: string, body: string) => void
   onResolve: (id: string) => void
+  onUnresolve: (id: string) => void
 }
 
-export function CommentBubble({ comment, onDelete, onReply, onResolve }: CommentBubbleProps) {
+export function CommentBubble({
+  comment,
+  onDelete,
+  onReply,
+  onResolve,
+  onUnresolve,
+}: CommentBubbleProps) {
   const [, setTick] = useState(0)
-  const [replying, setReplying] = useState(false)
   const isResolved = comment.status === 'resolved'
 
   useEffect(() => {
@@ -28,10 +34,20 @@ export function CommentBubble({ comment, onDelete, onReply, onResolve }: Comment
         <UserCircle size={18} className="comment-bubble-avatar" />
         <span className="comment-bubble-time">{timeAgo(comment.createdAt)}</span>
         {isResolved ? (
-          <span className="comment-bubble-resolved">
-            <CheckCircle2 size={14} />
-            Resolved
-          </span>
+          <>
+            <span className="comment-bubble-resolved">
+              <CheckCircle2 size={14} />
+              Resolved
+            </span>
+            <button
+              className="comment-bubble-resolve"
+              onClick={() => onUnresolve(comment.id)}
+              title="Reopen this thread"
+            >
+              <RotateCcw size={14} />
+              Mark unresolved
+            </button>
+          </>
         ) : (
           // Offered even before a reply lands: a thread can become moot before it
           // is ever answered.
@@ -76,21 +92,14 @@ export function CommentBubble({ comment, onDelete, onReply, onResolve }: Comment
           ))}
         </div>
       )}
-      {replying ? (
-        <CommentForm
-          onSubmit={(body) => {
-            onReply(comment.id, body)
-            setReplying(false)
-          }}
-          onCancel={() => setReplying(false)}
-        />
-      ) : (
-        // Available on resolved threads too: following up on a finished fix
-        // ("undo this") is the main reason to reply at all.
-        <button className="comment-bubble-reply" onClick={() => setReplying(true)}>
-          Reply
-        </button>
-      )}
+      {/* Always open rather than behind a Reply button, and present on resolved threads
+          too: following up on a finished fix ("undo this") is the main reason to reply. */}
+      <CommentForm
+        onSubmit={(body) => onReply(comment.id, body)}
+        placeholder="Reply..."
+        submitLabel="Reply"
+        autoFocus={false}
+      />
     </div>
   )
 }

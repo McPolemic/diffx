@@ -2,22 +2,33 @@ import { useState, useRef, useEffect } from 'react'
 
 interface CommentFormProps {
   onSubmit: (body: string) => void
-  onCancel: () => void
+  onCancel?: () => void
+  placeholder?: string
+  submitLabel?: string
+  autoFocus?: boolean
 }
 
-export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
+export function CommentForm({
+  onSubmit,
+  onCancel,
+  placeholder = 'Leave a review comment...',
+  submitLabel = 'Comment',
+  autoFocus = true,
+}: CommentFormProps) {
   const [body, setBody] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    textareaRef.current?.focus()
-  }, [])
+    if (autoFocus) textareaRef.current?.focus()
+  }, [autoFocus])
 
   const handleSubmit = () => {
     const trimmed = body.trim()
-    if (trimmed) {
-      onSubmit(trimmed)
-    }
+    if (!trimmed) return
+    onSubmit(trimmed)
+    // The form can stay mounted between submissions, so clear it here rather than
+    // relying on unmount to reset.
+    setBody('')
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -26,7 +37,7 @@ export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
       handleSubmit()
     }
     if (e.key === 'Escape') {
-      onCancel()
+      onCancel?.()
     }
   }
 
@@ -37,15 +48,17 @@ export function CommentForm({ onSubmit, onCancel }: CommentFormProps) {
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Leave a review comment... (markdown supported)"
+        placeholder={placeholder}
         rows={3}
       />
       <div className="comment-form-actions">
-        <button className="btn btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
+        {onCancel && (
+          <button className="btn btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
         <button className="btn btn-primary" onClick={handleSubmit} disabled={!body.trim()}>
-          Comment
+          {submitLabel}
         </button>
       </div>
     </div>
