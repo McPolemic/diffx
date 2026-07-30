@@ -9,6 +9,7 @@ interface ToolbarProps {
   additions: number
   deletions: number
   commentCount: number
+  reviewDone: boolean
   diffStyle: 'split' | 'unified'
   diffOptions: DiffOptions
   defaultTabSize: number
@@ -20,7 +21,7 @@ interface ToolbarProps {
   onDefaultTabSizeChange: (size: number) => void
   onSoftWrapChange: (softWrap: boolean) => void
   onBrowserChange: (browser: string) => void
-  onCopyComments: () => Promise<void>
+  onDone: () => Promise<void>
 }
 
 export function Toolbar({
@@ -30,6 +31,7 @@ export function Toolbar({
   additions,
   deletions,
   commentCount,
+  reviewDone,
   diffStyle,
   diffOptions,
   defaultTabSize,
@@ -41,16 +43,19 @@ export function Toolbar({
   onDefaultTabSizeChange,
   onSoftWrapChange,
   onBrowserChange,
-  onCopyComments,
+  onDone,
 }: ToolbarProps) {
-  const [copied, setCopied] = useState(false)
+  const [handingOff, setHandingOff] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
 
-  const handleCopy = async () => {
-    await onCopyComments()
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const handleDone = async () => {
+    setHandingOff(true)
+    try {
+      await onDone()
+    } finally {
+      setHandingOff(false)
+    }
   }
 
   useEffect(() => {
@@ -172,10 +177,11 @@ export function Toolbar({
         </div>
         <button
           className="btn btn-primary btn-sm"
-          onClick={handleCopy}
-          disabled={commentCount === 0}
+          onClick={handleDone}
+          disabled={reviewDone || handingOff}
+          title="Finish commenting and hand the review off"
         >
-          {copied ? 'Copied!' : `Copy comments (${commentCount})`}
+          {reviewDone ? 'Handed off' : commentCount > 0 ? `Done (${commentCount})` : 'Done'}
         </button>
       </div>
     </div>

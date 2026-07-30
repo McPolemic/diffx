@@ -9,6 +9,7 @@ import { useComments } from './hooks/useComments'
 import { useSettings } from './hooks/useSettings'
 import { useViewed } from './hooks/useViewed'
 import { useFullDiffs, fileKey } from './hooks/useFullDiffs'
+import { useReviewStatus } from './hooks/useReviewStatus'
 import { Toolbar } from './components/Toolbar'
 import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
@@ -35,8 +36,8 @@ export function App() {
     staged: settings.staged,
     untracked: settings.untracked,
   })
-  const { comments, addComment, removeComment, copyAllComments } =
-    useComments()
+  const { comments, addComment, removeComment } = useComments()
+  const { reviewDone, markDone } = useReviewStatus()
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
@@ -189,6 +190,7 @@ export function App() {
         additions={diffStats.additions}
         deletions={diffStats.deletions}
         commentCount={comments.length}
+        reviewDone={reviewDone}
         diffStyle={settings.diffStyle}
         diffOptions={{ staged: settings.staged, untracked: settings.untracked }}
         defaultTabSize={settings.defaultTabSize}
@@ -200,7 +202,9 @@ export function App() {
         onDefaultTabSizeChange={(size) => updateSettings({ defaultTabSize: size })}
         onSoftWrapChange={(softWrap) => updateSettings({ softWrap })}
         onBrowserChange={(browser) => updateSettings({ browser })}
-        onCopyComments={copyAllComments}
+        onDone={async () => {
+          await markDone()
+        }}
       />
       <div className="app-body">
         {sidebar.collapsed ? (
