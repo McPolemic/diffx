@@ -10,9 +10,14 @@ async function fetchComments(): Promise<ReviewComment[]> {
   return res.json()
 }
 
-export function useComments() {
+export function useComments({ enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient()
-  const { data: comments = [] } = useQuery({ queryKey: COMMENTS_KEY, queryFn: fetchComments, refetchInterval: 3000 })
+  const { data: comments = [] } = useQuery({
+    queryKey: COMMENTS_KEY,
+    queryFn: fetchComments,
+    refetchInterval: enabled ? 3000 : false,
+    enabled,
+  })
 
   const addMutation = useMutation({
     mutationFn: async (params: { filePath: string; side: 'deletions' | 'additions'; lineNumber: number; lineContent: string; body: string }) => {

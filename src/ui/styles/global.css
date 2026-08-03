@@ -296,6 +296,26 @@ body {
     color: #ffffff;
 }
 
+.review-closed-banner {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    background: var(--comment-bg);
+    border-bottom: 1px solid var(--comment-border);
+    color: var(--text);
+    font-size: 12px;
+}
+
+/* Nothing can be written once the server is gone, so the controls that would try are
+   visibly out of action rather than silently failing. */
+.review-closed .comment-form,
+.review-closed .comment-bubble-resolve,
+.review-closed .comment-bubble-undo,
+.review-closed .comment-bubble-delete,
+.review-closed .comment-resolved-footer,
+.review-closed .gutter-add-btn {
+    display: none;
+}
+
 /* Layout */
 .app-body {
     display: flex;

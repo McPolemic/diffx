@@ -298,15 +298,20 @@ export function createApp(
     })
   })
 
-  // Signals that the reviewer has finished commenting. Deliberately does not stop the
-  // server: outstanding comments still need replies and resolutions, which the reviewer
-  // watches land in the browser. Shutdown is a separate, explicit call.
+  // The reviewer saying they are done ends the review outright. Every comment was emitted
+  // as it was written, so nothing is in flight; what stops is the ability to write back to
+  // a browser the reviewer has finished with. The conversation continues in their agent.
   app.post('/api/review-done', async (c) => {
     const comments = await store.getAll()
     const openComments = comments.filter((comment) => comment.status === 'open').length
     if (!reviewDone) {
       reviewDone = true
       emitEvent('REVIEW-DONE', { openComments, totalComments: comments.length })
+      // Let the response reach the browser before the process goes away.
+      setTimeout(() => {
+        emitEvent('SHUTDOWN')
+        onShutdown()
+      }, 50)
     }
     return c.json({ reviewDone, openComments })
   })

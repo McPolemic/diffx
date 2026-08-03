@@ -36,8 +36,9 @@ export function App() {
     staged: settings.staged,
     untracked: settings.untracked,
   })
-  const { comments, addComment, removeComment, replyToComment, resolveComment, unresolveComment } = useComments()
   const { reviewDone, markDone } = useReviewStatus()
+  const { comments, addComment, removeComment, replyToComment, resolveComment, unresolveComment } =
+    useComments({ enabled: !reviewDone })
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
@@ -187,7 +188,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${reviewDone ? 'review-closed' : ''}`}>
       <Toolbar
         repoName={repoName}
         branch={branch}
@@ -211,6 +212,12 @@ export function App() {
           await markDone()
         }}
       />
+      {reviewDone && (
+        <div className="review-closed-banner">
+          Review handed off. The server has stopped, so this page is a snapshot now.
+          Carry on in your terminal.
+        </div>
+      )}
       <div className="app-body">
         {sidebar.collapsed ? (
           <aside className="sidebar sidebar-collapsed" style={{ width: sidebar.visibleSize() }}>
