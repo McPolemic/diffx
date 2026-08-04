@@ -12,8 +12,10 @@ interface DiffViewerProps {
   defaultTabSize: number
   softWrap: boolean
   viewedFiles: Set<string>
+  collapsedFiles: Set<string>
   binaryFiles: Map<string, BinaryFileInfo>
   onViewedChange: (filePath: string, viewed: boolean) => void
+  onCollapsedChange: (filePath: string, collapsed: boolean) => void
   fileAnnotationsMap: Map<string, DiffLineAnnotation<ReviewComment>[]>
   onAddComment: (filePath: string, side: AnnotationSide, lineNumber: number, lineContent: string, body: string) => void
   onDeleteComment: (id: string) => void
@@ -31,8 +33,10 @@ export const DiffViewer = memo(function DiffViewer({
   defaultTabSize,
   softWrap,
   viewedFiles,
+  collapsedFiles,
   binaryFiles,
   onViewedChange,
+  onCollapsedChange,
   fileAnnotationsMap,
   onAddComment,
   onDeleteComment,
@@ -96,7 +100,9 @@ export const DiffViewer = memo(function DiffViewer({
             tabSize={tabSizeMap[filePath] ?? defaultTabSize}
             softWrap={softWrap}
             viewed={viewedFiles.has(filePath)}
+            collapsed={collapsedFiles.has(filePath)}
             onViewedChange={onViewedChange}
+            onCollapsedChange={onCollapsedChange}
             onAddComment={onAddComment}
             onDeleteComment={onDeleteComment}
             onReplyComment={onReplyComment}

@@ -9,6 +9,7 @@ import { timeAgo, truncate, fileName } from '../utils'
 
 interface CommentTrackerProps {
   comments: ReviewComment[]
+  onCommentClick: (comment: ReviewComment) => void
 }
 
 type CommentStatus = 'open' | 'replied' | 'resolved'
@@ -42,7 +43,7 @@ function StatusBadge({ status }: { status: CommentStatus }) {
   }
 }
 
-export function CommentTracker({ comments }: CommentTrackerProps) {
+export function CommentTracker({ comments, onCommentClick }: CommentTrackerProps) {
   if (comments.length === 0) return null
 
   const sorted = [...comments].sort((a, b) => b.createdAt - a.createdAt)
@@ -70,7 +71,16 @@ export function CommentTracker({ comments }: CommentTrackerProps) {
               key={comment.id}
               className={`ct-item ${status === 'resolved' ? 'ct-item-resolved' : ''}`}
             >
-              <a href={`#comment-${comment.id}`} className="ct-item-link">
+              {/* The href keeps link affordances, but the jump is ours: the target file
+                  may be collapsed, in which case there is nothing to navigate to yet. */}
+              <a
+                href={`#comment-${comment.id}`}
+                className="ct-item-link"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onCommentClick(comment)
+                }}
+              >
                 <div className="ct-item-header">
                   <StatusBadge status={status} />
                   <span className="ct-item-file" title={comment.filePath}>

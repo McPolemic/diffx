@@ -5,6 +5,7 @@ import { serve } from '@hono/node-server'
 import { getGitDiff, getCustomGitDiff, getRepoName, getBranchName, getFileContent, getBlobContent, getWorktreeFileContent, isImageFile, getTabSizeForFiles, getUntrackedFilePaths } from './git.js'
 import { loadSettings, saveSettings } from './settings.js'
 import { InMemoryCommentStore } from './comments.js'
+import { ViewedStore } from './viewed.js'
 import type { CommentStore } from './comments.js'
 import type { ReplyAuthor } from './types.js'
 import { isSafePath } from './path.js'
@@ -110,7 +111,7 @@ export function createApp(
   const app = new Hono()
   const isCustomMode = !!customDiffArgs
   const store = commentStore ?? new InMemoryCommentStore()
-  const viewedFiles = new Map<string, string>()
+  const viewedFiles = new ViewedStore(customDiffArgs?.join(' ') || 'working-tree')
   let reviewDone = false
 
   app.get('/api/diff', (c) => {
@@ -192,25 +193,42 @@ export function createApp(
   })
 
   app.get('/api/viewed', (c) => {
-    return c.json(Object.fromEntries(viewedFiles))
+    return c.json(viewedFiles.all())
   })
 
   app.put('/api/viewed', async (c) => {
     const { filePath, viewed, contentHash } = await c.req.json<{ filePath: string; viewed: boolean; contentHash?: string }>()
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      return c.json({ error: 'filePath required' }, 400)
+    }
     if (viewed) {
       if (typeof contentHash !== 'string' || contentHash.length === 0) {
         return c.json({ error: 'non-empty contentHash required when marking viewed' }, 400)
       }
       viewedFiles.set(filePath, contentHash)
     } else {
-      viewedFiles.delete(filePath)
+      viewedFiles.clear(filePath)
     }
+    return c.json({ ok: true })
+  })
+
+  app.delete('/api/viewed', (c) => {
+    viewedFiles.clearAll()
     return c.json({ ok: true })
   })
 
   app.get('/api/comments', async (c) => {
     const comments = await store.getAll()
     return c.json(comments)
+  })
+
+  // The stdout events carry whole bodies, but whatever is consuming them may surface
+  // them elided. Fetching one thread by id is the cheap way back to the full text.
+  app.get('/api/comments/:id', async (c) => {
+    const comments = await store.getAll()
+    const comment = comments.find((candidate) => candidate.id === c.req.param('id'))
+    if (!comment) return c.json({ error: 'Comment not found' }, 404)
+    return c.json(comment)
   })
 
   app.post('/api/comments', async (c) => {

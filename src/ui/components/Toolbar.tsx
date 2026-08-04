@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { GitBranch, Settings } from 'lucide-react'
 import type { DiffOptions } from '../hooks/useDiff'
+import { ViewedProgress } from './ViewedProgress'
 
 interface ToolbarProps {
   repoName: string
   branch: string
   fileCount: number
+  viewedCount: number
   additions: number
   deletions: number
   unresolvedCount: number
@@ -21,6 +23,7 @@ interface ToolbarProps {
   onDefaultTabSizeChange: (size: number) => void
   onSoftWrapChange: (softWrap: boolean) => void
   onBrowserChange: (browser: string) => void
+  onClearViewed: () => void
   onDone: () => Promise<void>
 }
 
@@ -28,6 +31,7 @@ export function Toolbar({
   repoName,
   branch,
   fileCount,
+  viewedCount,
   additions,
   deletions,
   unresolvedCount,
@@ -43,6 +47,7 @@ export function Toolbar({
   onDefaultTabSizeChange,
   onSoftWrapChange,
   onBrowserChange,
+  onClearViewed,
   onDone,
 }: ToolbarProps) {
   const [handingOff, setHandingOff] = useState(false)
@@ -85,6 +90,7 @@ export function Toolbar({
           {additions > 0 && <span className="stat-additions"> +{additions}</span>}
           {deletions > 0 && <span className="stat-deletions"> -{deletions}</span>}
         </span>
+        <ViewedProgress viewed={viewedCount} total={fileCount} />
       </div>
       <div className="toolbar-right">
         <div className="toolbar-toggle">
@@ -172,6 +178,17 @@ export function Toolbar({
                   <option value="brave">Brave</option>
                 </select>
               </div>
+              <div className="settings-divider" />
+              <button
+                className="settings-item settings-item-button"
+                disabled={viewedCount === 0}
+                onClick={() => {
+                  onClearViewed()
+                  setSettingsOpen(false)
+                }}
+              >
+                Mark all files unviewed
+              </button>
             </div>
           )}
         </div>

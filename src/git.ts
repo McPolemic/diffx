@@ -167,6 +167,28 @@ export function getUntrackedFilePaths(): string[] {
   return output ? output.split('\n') : []
 }
 
+// Untracked files have no blob in the object database, so hash their contents the way
+// git would. The oid in the patch is what tells the client a file it has already seen
+// has changed since, and a placeholder would make every untracked file look frozen.
+function hashUntrackedFiles(absolutePaths: string[]): Map<string, string> {
+  const hashes = new Map<string, string>()
+  if (absolutePaths.length === 0) return hashes
+  try {
+    const output = execFileSync('git', ['hash-object', '--stdin-paths'], {
+      input: absolutePaths.join('\n') + '\n',
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      maxBuffer: 50 * 1024 * 1024,
+    }).trim()
+    const lines = output ? output.split('\n') : []
+    if (lines.length !== absolutePaths.length) return hashes
+    absolutePaths.forEach((path, index) => hashes.set(path, lines[index].slice(0, 7)))
+  } catch {
+    // Leave the map empty and fall back to the placeholder oid.
+  }
+  return hashes
+}
+
 function getUntrackedFilesDiff(): string {
   const root = getRepoRoot()
   const output = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
@@ -178,14 +200,16 @@ function getUntrackedFilesDiff(): string {
 
   const files = output.split('\n')
   const patches: string[] = []
+  const hashes = hashUntrackedFiles(files.map((file) => join(root, file)))
 
   for (const file of files) {
     const absolutePath = join(root, file)
+    const newOid = hashes.get(absolutePath) ?? '0000001'
     if (isBinaryFile(absolutePath)) {
       const patch = [
         `diff --git a/${file} b/${file}`,
         'new file mode 100644',
-        'index 0000000..0000001',
+        `index 0000000..${newOid}`,
         `Binary files /dev/null and b/${file} differ`,
       ].join('\n')
       patches.push(patch)
@@ -197,7 +221,7 @@ function getUntrackedFilesDiff(): string {
         const patch = [
           `diff --git a/${file} b/${file}`,
           'new file mode 100644',
-          'index 0000000..0000001',
+          `index 0000000..${newOid}`,
           '--- /dev/null',
           `+++ b/${file}`,
           `@@ -0,0 +1,${lines.length} @@`,

@@ -61,5 +61,15 @@ export function useViewed(files: FileDiffMetadata[]) {
     }
   }, [queryClient, fileHashByName])
 
-  return { viewedFiles, setViewed }
+  const clearAllViewed = useCallback(async () => {
+    await queryClient.cancelQueries({ queryKey: VIEWED_KEY })
+    queryClient.setQueryData<ViewedMap>(VIEWED_KEY, {})
+
+    const res = await fetch('/api/viewed', { method: 'DELETE' })
+    if (!res.ok) {
+      queryClient.invalidateQueries({ queryKey: VIEWED_KEY })
+    }
+  }, [queryClient])
+
+  return { viewedFiles, setViewed, clearAllViewed }
 }

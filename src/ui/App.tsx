@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Resizable } from 'react-resizable'
 import { parsePatchFiles } from '@pierre/diffs'
-import { Virtualizer } from '@pierre/diffs/react'
+import { Virtualizer, useVirtualizer } from '@pierre/diffs/react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { ReviewComment } from '../types'
 import { useDiff } from './hooks/useDiff'
@@ -15,6 +15,80 @@ import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
 import { CommentTracker } from './components/CommentTracker'
 import { SidebarStorage } from './sidebarStorage'
+
+interface JumpTarget {
+  commentId: string
+  filePath: string
+  side: ReviewComment['side']
+  lineNumber: number
+}
+
+interface FileDiffInstance {
+  top?: number
+  getLinePosition(lineNumber: number, side: ReviewComment['side']): { top: number; height: number } | undefined
+}
+
+// The virtualizer keeps its per-file instances to itself and a rendered <FileDiff> has no
+// public way to answer "where is line N". Reaching for the map is deliberate and guarded:
+// without a position we still scroll to the file, just not to the line.
+function findFileInstance(virtualizer: unknown, card: HTMLElement): FileDiffInstance | undefined {
+  const observers = (virtualizer as { observers?: unknown } | null | undefined)?.observers
+  if (!(observers instanceof Map)) return undefined
+  for (const [container, instance] of observers as Map<HTMLElement, FileDiffInstance>) {
+    if (card.contains(container)) return instance
+  }
+  return undefined
+}
+
+// Jumping to a comment cannot just scroll to its anchor: only lines near the viewport are
+// built, so until we are close the anchor sits in the DOM at zero size. Aim using the
+// line's computed position, then let the anchor make the landing exact once it renders.
+// Re-aiming matters because the file may still have been collapsing as we started.
+function CommentJumper({ target, onDone }: { target: JumpTarget | null; onDone: () => void }) {
+  const virtualizer = useVirtualizer()
+
+  useEffect(() => {
+    if (target == null) return
+    let cancelled = false
+
+    const aim = () => {
+      const scroller = document.querySelector<HTMLElement>('.main-scroll')
+      const card = document.getElementById(`file-${target.filePath}`)
+      if (scroller == null || card == null) return
+      const instance = findFileInstance(virtualizer, card)
+      const position = instance?.getLinePosition(target.lineNumber, target.side)
+      if (instance?.top == null || position == null) {
+        card.scrollIntoView({ block: 'start' })
+        return
+      }
+      scroller.scrollTo({ top: instance.top + position.top - scroller.clientHeight / 3 })
+    }
+
+    const settle = (attemptsLeft: number) => {
+      if (cancelled) return
+      const anchor = document.getElementById(`comment-${target.commentId}`)
+      if (anchor != null && anchor.getBoundingClientRect().height > 0) {
+        anchor.scrollIntoView({ block: 'center' })
+        onDone()
+        return
+      }
+      if (attemptsLeft === 0) {
+        onDone()
+        return
+      }
+      if (attemptsLeft % 10 === 0) aim()
+      requestAnimationFrame(() => settle(attemptsLeft - 1))
+    }
+
+    aim()
+    settle(60)
+    return () => {
+      cancelled = true
+    }
+  }, [target, virtualizer, onDone])
+
+  return null
+}
 
 function useWindowSize({ factor }: { factor: number }) {
   const compute = () => Math.round(window.innerWidth * factor)
@@ -40,6 +114,7 @@ export function App() {
   const { comments, addComment, removeComment, replyToComment, resolveComment, unresolveComment } =
     useComments({ enabled: !reviewDone })
   const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [jumpTarget, setJumpTarget] = useState<JumpTarget | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
 
@@ -92,7 +167,24 @@ export function App() {
     return files.map((f) => fullFiles.get(fileKey(f)) ?? f)
   }, [files, fullFiles])
 
-  const { viewedFiles, setViewed } = useViewed(files)
+  const { viewedFiles, setViewed, clearAllViewed } = useViewed(files)
+
+  // Marking a file viewed collapses it, but collapsing is its own state: expanding a
+  // viewed file to read a comment must not claim you have unreviewed it. An entry here
+  // overrides the default for one file until its viewed state changes again.
+  const [collapseOverrides, setCollapseOverrides] = useState<Map<string, boolean>>(() => new Map())
+
+  const collapsedFiles = useMemo(() => {
+    const collapsed = new Set<string>()
+    for (const file of files) {
+      if (collapseOverrides.get(file.name) ?? viewedFiles.has(file.name)) collapsed.add(file.name)
+    }
+    return collapsed
+  }, [files, viewedFiles, collapseOverrides])
+
+  const setCollapsed = useCallback((filePath: string, collapsed: boolean) => {
+    setCollapseOverrides((prev) => new Map(prev).set(filePath, collapsed))
+  }, [])
 
   const diffStats = useMemo(() => {
     if (!patch) return { additions: 0, deletions: 0 }
@@ -153,7 +245,28 @@ export function App() {
 
   const handleViewedChange = useCallback((filePath: string, viewed: boolean) => {
     setViewed(filePath, viewed)
+    // Toggling viewed is a fresh statement about the file, so it takes back the default:
+    // viewed collapses, unviewed expands.
+    setCollapseOverrides((prev) => {
+      if (!prev.has(filePath)) return prev
+      const next = new Map(prev)
+      next.delete(filePath)
+      return next
+    })
   }, [setViewed])
+
+  const handleCommentClick = useCallback((comment: ReviewComment) => {
+    setActiveFile(comment.filePath)
+    setCollapseOverrides((prev) => new Map(prev).set(comment.filePath, false))
+    setJumpTarget({
+      commentId: comment.id,
+      filePath: comment.filePath,
+      side: comment.side,
+      lineNumber: comment.lineNumber,
+    })
+  }, [])
+
+  const handleJumpDone = useCallback(() => setJumpTarget(null), [])
 
   const sidebarContent = (
     <div className="sidebar-content">
@@ -167,7 +280,7 @@ export function App() {
         collapsed={sidebar.collapsed}
         onToggleCollapse={handleToggleCollapse}
       />
-      {!sidebar.collapsed && <CommentTracker comments={comments} />}
+      {!sidebar.collapsed && <CommentTracker comments={comments} onCommentClick={handleCommentClick} />}
     </div>
   )
 
@@ -193,6 +306,7 @@ export function App() {
         repoName={repoName}
         branch={branch}
         fileCount={files.length}
+        viewedCount={viewedFiles.size}
         additions={diffStats.additions}
         deletions={diffStats.deletions}
         unresolvedCount={unresolvedCount}
@@ -208,6 +322,7 @@ export function App() {
         onDefaultTabSizeChange={(size) => updateSettings({ defaultTabSize: size })}
         onSoftWrapChange={(softWrap) => updateSettings({ softWrap })}
         onBrowserChange={(browser) => updateSettings({ browser })}
+        onClearViewed={clearAllViewed}
         onDone={async () => {
           await markDone()
         }}
@@ -242,6 +357,7 @@ export function App() {
         )}
         <main className="main">
           <Virtualizer className="main-scroll" contentClassName="main-content">
+            <CommentJumper target={jumpTarget} onDone={handleJumpDone} />
             <DiffViewer
               files={displayFiles}
               diffStyle={settings.diffStyle}
@@ -249,8 +365,10 @@ export function App() {
               defaultTabSize={settings.defaultTabSize}
               softWrap={settings.softWrap}
               viewedFiles={viewedFiles}
+              collapsedFiles={collapsedFiles}
               binaryFiles={binaryFileMap}
               onViewedChange={handleViewedChange}
+              onCollapsedChange={setCollapsed}
               fileAnnotationsMap={fileAnnotationsMap}
               onAddComment={addComment}
               onDeleteComment={removeComment}
