@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Resizable } from 'react-resizable'
 import { parsePatchFiles } from '@pierre/diffs'
 import { Virtualizer, useVirtualizer } from '@pierre/diffs/react'
@@ -15,6 +15,7 @@ import { DiffViewer } from './components/DiffViewer'
 import { FileTree } from './components/FileTree'
 import { CommentTracker } from './components/CommentTracker'
 import { SidebarStorage } from './sidebarStorage'
+import { asWriter, logScrollEvent, scrollDebugEnabled, startScrollDebug } from './scrollDebug'
 
 interface JumpTarget {
   commentId: string
@@ -50,6 +51,8 @@ function CommentJumper({ target, onDone }: { target: JumpTarget | null; onDone: 
   useEffect(() => {
     if (target == null) return
     let cancelled = false
+
+    logScrollEvent('jumping to comment', { file: target.filePath, line: target.lineNumber })
 
     const aim = () => {
       const scroller = document.querySelector<HTMLElement>('.main-scroll')
@@ -90,6 +93,168 @@ function CommentJumper({ target, onDone }: { target: JumpTarget | null; onDone: 
   return null
 }
 
+interface ScrollPin {
+  filePath: string
+  offset: number
+}
+
+// The file the reviewer is reading: the first card still showing at or below the top edge.
+// Held by path rather than by element because the point of pinning is to survive a card
+// being replaced.
+function capturePin(): ScrollPin | null {
+  const scroller = document.querySelector<HTMLElement>('.main-scroll')
+  if (scroller == null) return null
+  const scrollerTop = scroller.getBoundingClientRect().top
+  for (const card of scroller.querySelectorAll<HTMLElement>('.file-diff-card')) {
+    const offset = card.getBoundingClientRect().top - scrollerTop
+    if (offset + card.offsetHeight > 0) return { filePath: card.id, offset }
+  }
+  return null
+}
+
+// Returns the correction it had to make, so the caller can tell a settled layout from one
+// still moving underneath it.
+function applyPin(pin: ScrollPin): number {
+  const scroller = document.querySelector<HTMLElement>('.main-scroll')
+  const card = document.getElementById(pin.filePath)
+  if (scroller == null || card == null) return 0
+  const offset = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+  const correction = offset - pin.offset
+  if (correction !== 0) scroller.scrollTop += correction
+  return correction
+}
+
+// A rebuilt card settles in bursts as its lines arrive, so hold until nothing has moved for
+// a stretch rather than for a fixed count — a big file highlighting slowly still lands.
+const PIN_SETTLED_FRAMES = 12
+// Even so, never hold longer than this: past a few seconds the reviewer owns the scroll,
+// whatever the page is doing.
+const PIN_MAX_FRAMES = 180
+
+// A card can only take on new content by remounting (see DiffViewer), and a card that has
+// just mounted is empty until its lines are built: everything below it slides up, and the
+// virtualizer dutifully corrects the scroll for height that is about to come back, landing
+// the reviewer somewhere near the top. So hold the file they were reading where it was
+// until the new cards have filled in, and stop the moment they scroll for themselves.
+function useScrollPin(cardSignature: string) {
+  const rendered = useRef(cardSignature)
+  const pin = useRef<ScrollPin | null>(null)
+
+  // Read during render because this is the last moment the outgoing cards are still
+  // measurable; by the time an effect runs they have already been replaced.
+  if (rendered.current !== cardSignature) {
+    if (scrollDebugEnabled) {
+      const before = new Set(rendered.current.split('\n'))
+      const after = cardSignature.split('\n')
+      logScrollEvent('cards remounting', {
+        files: after.filter((key) => !before.has(key)).map((key) => key.slice(0, key.indexOf('\0'))),
+      })
+    }
+    rendered.current = cardSignature
+    pin.current = capturePin()
+    logScrollEvent(
+      'pin captured',
+      pin.current == null
+        ? { pinned: 'nothing visible' }
+        : { file: pin.current.filePath, offset: Math.round(pin.current.offset) },
+    )
+  }
+
+  useEffect(() => {
+    const target = pin.current
+    pin.current = null
+    if (target == null) return
+
+    let cancelled = false
+    const scroller = document.querySelector<HTMLElement>('.main-scroll')
+    // Once the hold is over the reviewer's input is no longer releasing anything, and leaving
+    // the listeners attached logs a "pin released" for every wheel tick until the next remount.
+    const detach = () => {
+      scroller?.removeEventListener('wheel', release)
+      scroller?.removeEventListener('mousedown', release)
+      window.removeEventListener('keydown', release)
+    }
+    const release = (event: Event) => {
+      cancelled = true
+      detach()
+      logScrollEvent('pin released', { to: event.type })
+    }
+    scroller?.addEventListener('wheel', release, { passive: true })
+    scroller?.addEventListener('mousedown', release)
+    window.addEventListener('keydown', release)
+
+    const hold = (framesLeft: number, settledFrames: number) => {
+      if (cancelled) return
+      if (framesLeft === 0) {
+        detach()
+        logScrollEvent('pin gave up', { file: target.filePath })
+        return
+      }
+      const correction = asWriter('the scroll pin', () => applyPin(target))
+      if (correction !== 0) logScrollEvent('pin corrected', { file: target.filePath, by: Math.round(correction) })
+      const settled = correction === 0 ? settledFrames + 1 : 0
+      if (settled >= PIN_SETTLED_FRAMES) {
+        detach()
+        logScrollEvent('pin settled', { file: target.filePath })
+        return
+      }
+      requestAnimationFrame(() => hold(framesLeft - 1, settled))
+    }
+    hold(PIN_MAX_FRAMES, 0)
+
+    return () => {
+      cancelled = true
+      detach()
+    }
+  }, [cardSignature])
+}
+
+const TYPING_LULL_MS = 30_000
+
+// A card whose file changed re-renders by remounting (see DiffViewer), which would take a
+// half-written comment with it. So while the reviewer is at a comment box, leave the diff
+// alone; it catches up as soon as they step away. The lull expires so a box left focused
+// and forgotten cannot freeze the diff for the rest of the review.
+function useTypingLull(): boolean {
+  const [typing, setTyping] = useState(false)
+
+  useEffect(() => {
+    let expiry: ReturnType<typeof setTimeout> | undefined
+    let held = false
+
+    const update = () => {
+      const atCommentBox = document.activeElement instanceof HTMLTextAreaElement
+      if (held !== atCommentBox) {
+        held = atCommentBox
+        logScrollEvent(atCommentBox ? 'diff held: at a comment box' : 'diff resumed')
+      }
+      setTyping(atCommentBox)
+      clearTimeout(expiry)
+      if (atCommentBox) {
+        expiry = setTimeout(() => {
+          held = false
+          logScrollEvent('diff resumed: typing lull expired')
+          setTyping(false)
+        }, TYPING_LULL_MS)
+      }
+    }
+    // Focus has not moved yet while focusout is dispatching, so read it a tick later.
+    const updateAfterBlur = () => setTimeout(update, 0)
+
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', updateAfterBlur)
+    document.addEventListener('keydown', update, true)
+    return () => {
+      clearTimeout(expiry)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', updateAfterBlur)
+      document.removeEventListener('keydown', update, true)
+    }
+  }, [])
+
+  return typing
+}
+
 function useWindowSize({ factor }: { factor: number }) {
   const compute = () => Math.round(window.innerWidth * factor)
 
@@ -106,17 +271,25 @@ function useWindowSize({ factor }: { factor: number }) {
 
 export function App() {
   const { settings, loaded, updateSettings } = useSettings()
+  const { reviewDone, markDone } = useReviewStatus()
+  const typing = useTypingLull()
   const { patch, repoName, branch, customMode, binaryFiles, tabSizeMap, untrackedFiles, loading, error } = useDiff({
     staged: settings.staged,
     untracked: settings.untracked,
+    enabled: !reviewDone && !typing,
   })
-  const { reviewDone, markDone } = useReviewStatus()
   const { comments, addComment, removeComment, replyToComment, resolveComment, unresolveComment } =
     useComments({ enabled: !reviewDone })
   const [activeFile, setActiveFile] = useState<string | null>(null)
   const [jumpTarget, setJumpTarget] = useState<JumpTarget | null>(null)
   const [sidebar, setSidebar] = useState(() => SidebarStorage.load())
   const maxSidebarWidth = Math.max(SidebarStorage.minSize, useWindowSize({ factor: 0.5 }))
+
+  useEffect(startScrollDebug, [])
+
+  useEffect(() => {
+    if (patch != null) logScrollEvent('diff applied', { bytes: patch.length })
+  }, [patch])
 
   const handleResize = useCallback((_e: React.SyntheticEvent, data: { size: { width: number } }) => {
     setSidebar((prev) => prev.withSize(data.size.width))
@@ -167,6 +340,13 @@ export function App() {
     return files.map((f) => fullFiles.get(fileKey(f)) ?? f)
   }, [files, fullFiles])
 
+  // Mirrors the card keys in DiffViewer, so it changes exactly when cards remount.
+  const cardSignature = useMemo(
+    () => displayFiles.map((file) => `${fileKey(file)}-${file.isPartial ? 'p' : 'f'}`).join('\n'),
+    [displayFiles],
+  )
+  useScrollPin(cardSignature)
+
   const { viewedFiles, setViewed, clearAllViewed } = useViewed(files)
 
   // Marking a file viewed collapses it, but collapsing is its own state: expanding a
@@ -183,6 +363,7 @@ export function App() {
   }, [files, viewedFiles, collapseOverrides])
 
   const setCollapsed = useCallback((filePath: string, collapsed: boolean) => {
+    logScrollEvent(collapsed ? 'file collapsed' : 'file expanded', { file: filePath })
     setCollapseOverrides((prev) => new Map(prev).set(filePath, collapsed))
   }, [])
 
@@ -239,11 +420,13 @@ export function App() {
     setActiveFile(filePath)
     const el = document.getElementById(`file-${filePath}`)
     if (el) {
+      logScrollEvent('jumping to file', { file: filePath })
       el.scrollIntoView({ block: 'start' })
     }
   }, [])
 
   const handleViewedChange = useCallback((filePath: string, viewed: boolean) => {
+    logScrollEvent(viewed ? 'file marked viewed' : 'file marked unviewed', { file: filePath })
     setViewed(filePath, viewed)
     // Toggling viewed is a fresh statement about the file, so it takes back the default:
     // viewed collapses, unviewed expands.
@@ -325,6 +508,11 @@ export function App() {
         onClearViewed={clearAllViewed}
         onDone={async () => {
           await markDone()
+          // A page whose server has gone is a dead end, so ask the browser to close it.
+          // Chrome and Firefox honour this only for a window a script opened, which a tab
+          // launched from the CLI is not — hence the banner below, which is what the
+          // reviewer actually sees when the browser refuses.
+          window.close()
         }}
       />
       {reviewDone && (

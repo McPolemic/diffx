@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react'
 import type { FileDiffMetadata, DiffLineAnnotation, AnnotationSide } from '@pierre/diffs'
 import type { ReviewComment } from '../../types'
 import type { BinaryFileInfo } from '../hooks/useDiff'
+import { fileKey } from '../hooks/useFullDiffs'
 import { FileDiffCard } from './FileDiffCard'
 import { BinaryFileDiff } from './BinaryFileDiff'
 
@@ -86,12 +87,12 @@ export const DiffViewer = memo(function DiffViewer({
         }
         return (
           <FileDiffCard
-            // Include isPartial in the key so the card remounts when a file is
-            // upgraded from a partial (patch-only) to a full diff. The
-            // @pierre/diffs <FileDiff> under the Virtualizer does not re-process
-            // an in-place fileDiff change, so without a remount the upgraded
-            // diff never renders and hunk-context expansion controls never appear.
-            key={`${filePath}-${index}-${file.isPartial ? 'p' : 'f'}`}
+            // The @pierre/diffs <FileDiff> under the Virtualizer keeps the fileDiff it
+            // was hydrated with and ignores later ones, so a card only picks up new
+            // content by remounting. Key on the file's blob ids — so an edit made while
+            // the review is open renders — and on isPartial, so a file upgraded from a
+            // patch-only to a full diff gains its hunk-context expansion controls.
+            key={`${fileKey(file)}-${index}-${file.isPartial ? 'p' : 'f'}`}
             id={`file-${filePath}`}
             fileDiff={file}
             filePath={filePath}

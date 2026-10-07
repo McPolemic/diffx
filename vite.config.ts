@@ -10,6 +10,9 @@ export default defineConfig({
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,
+    // On while the scroll jump is being chased: the instrumentation logs Error objects so
+    // that DevTools can name the caller, and without a source map every frame is minified.
+    sourcemap: true,
   },
   server: {
     proxy: {

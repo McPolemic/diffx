@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { GitBranch, Settings } from 'lucide-react'
 import type { DiffOptions } from '../hooks/useDiff'
 import { ViewedProgress } from './ViewedProgress'
+import { scrollDebugEnabled, scrollLogText } from '../scrollDebug'
 
 interface ToolbarProps {
   repoName: string
@@ -52,6 +53,7 @@ export function Toolbar({
 }: ToolbarProps) {
   const [handingOff, setHandingOff] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [scrollLogCopied, setScrollLogCopied] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
 
   const handleDone = async () => {
@@ -189,6 +191,18 @@ export function Toolbar({
               >
                 Mark all files unviewed
               </button>
+              {scrollDebugEnabled && (
+                <button
+                  className="settings-item settings-item-button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(scrollLogText())
+                    setScrollLogCopied(true)
+                    setTimeout(() => setScrollLogCopied(false), 1500)
+                  }}
+                >
+                  {scrollLogCopied ? 'Copied' : 'Copy scroll debug log'}
+                </button>
+              )}
             </div>
           )}
         </div>

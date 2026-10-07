@@ -446,6 +446,11 @@ body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    /* The virtualizer holds the reader's place itself when lines swap between rendered and
+       estimated heights. Browser scroll anchoring corrects for the same shift a second time,
+       moving the page with nobody's name on the write. @pierre/diffs' CodeView turns it off
+       for the same reason; the Virtualizer leaves that to us. */
+    overflow-anchor: none;
 }
 
 .main-content {

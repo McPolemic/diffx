@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { processFile } from '@pierre/diffs'
 import type { FileDiffMetadata } from '@pierre/diffs'
+import { logScrollEvent } from '../scrollDebug'
 
 const ZERO_OID = /^0+$/
 
@@ -62,17 +63,24 @@ function contentsMatchHunks(partial: FileDiffMetadata, full: FileDiffMetadata): 
 export function useFullDiffs(patch: string | null, files: FileDiffMetadata[], options: { staged: boolean; untracked: boolean }) {
   const [fullFiles, setFullFiles] = useState<Map<string, FileDiffMetadata>>(() => new Map())
   const requested = useRef(new Set<string>())
-  const patchRef = useRef(patch)
 
   useEffect(() => {
-    if (patchRef.current !== patch) {
-      patchRef.current = patch
-      requested.current = new Set()
-      setFullFiles(new Map())
-    }
     if (!patch) return
 
     const chunkMap = buildChunkMap(patch)
+
+    // The diff is re-read while the review is open, so most patches arrive with only one
+    // file changed. An upgrade is keyed by name and blob ids, so it stays true for as long
+    // as the diff still contains that exact version — keeping the ones it does spares every
+    // untouched file a round trip and a remount.
+    for (const key of requested.current) {
+      if (!chunkMap.has(key)) requested.current.delete(key)
+    }
+    setFullFiles((prev) => {
+      const kept = new Map([...prev].filter(([key]) => chunkMap.has(key)))
+      return kept.size === prev.size ? prev : kept
+    })
+
     for (const file of files) {
       if (!file.isPartial || file.hunks.length === 0) continue
       if (file.type !== 'change' && file.type !== 'rename-changed') continue
@@ -94,13 +102,16 @@ export function useFullDiffs(patch: string | null, files: FileDiffMetadata[], op
       fetch(`/api/file-versions?${params}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { old: string; new: string } | null) => {
-          if (!data || patchRef.current !== patch) return
+          if (!data) return
           const upgraded = processFile(chunk, {
             cacheKey: `full:${key}`,
             oldFile: { name: file.prevName ?? file.name, contents: data.old },
             newFile: { name: file.name, contents: data.new },
           })
           if (!upgraded || upgraded.isPartial || !contentsMatchHunks(file, upgraded)) return
+          // The card for this file is about to remount with a taller body, which is one of
+          // the two ways the page can move out from under the reviewer.
+          logScrollEvent('full diff upgraded', { file: file.name })
           setFullFiles((prev) => new Map(prev).set(key, upgraded))
         })
         .catch(() => {})
